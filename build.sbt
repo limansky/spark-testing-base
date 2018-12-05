@@ -1,20 +1,56 @@
-organization := "com.holdenkarau"
+lazy val root = (project in file("."))
+  .aggregate(core, kafka_0_8, kafka_0_10)
 
-name := "spark-testing-base"
+lazy val core = (project in file("core"))
+  .settings(
+    name := "spark-testing-base",
+    commonSettings,
+    coreSources,
+    coreTestSources
+  )
 
-publishMavenStyle := true
+lazy val kafka_0_8 = (project in file("kafka-0.8"))
+  .settings(
+    name := "spark-testing-kafka-0_8",
+    commonSettings
+  )
 
-version := "0.11.0"
+lazy val kafka_0_10 = (projectin in file("kafka-0.10"))
+  .settings(
+    name := "spark-testing-kafka-0_10",
+    commonSettings
+  )
 
-sparkVersion := "2.4.0"
-
-scalaVersion := {
-  if (sparkVersion.value >= "2.0.0") {
-    "2.11.11"
-  } else {
-    "2.10.6"
+val commonSettings = Seq(
+  organization := "com.holdenkarau",
+  publishMavenStyle := true,
+  version := "0.11.0",
+  sparkVersion := "2.4.0",
+  scalaVersion := {
+    if (sparkVersion.value >= "2.0.0") {
+      "2.11.11"
+    } else {
+      "2.10.6"
+    }
+  },
+  crossScalaVersions := {
+    if (sparkVersion.value >= "2.4.0") {
+      Seq("2.11.11", "2.12.7")
+    } else if (sparkVersion.value >= "2.3.0") {
+      Seq("2.11.11")
+    } else {
+      Seq("2.10.6", "2.11.11")
+    }
+  },
+  scalacOptions ++= Seq("-deprecation", "-unchecked"),
+  javacOptions ++= {
+    if (sparkVersion.value >= "2.1.1") {
+      Seq("-source", "1.8", "-target", "1.8")
+    } else {
+      Seq("-source", "1.7", "-target", "1.7")
+    }
   }
-}
+)
 
 // See https://github.com/scala/scala/pull/3799
 coverageHighlighting := {
@@ -22,34 +58,19 @@ coverageHighlighting := {
     true
   } else {
     false
-  }
+  },
+  //tag::spName[]
+  spName := "holdenk/spark-testing-base"
+  //end::spName[]
 }
 
 
-crossScalaVersions := {
-  if (sparkVersion.value >= "2.4.0") {
-    Seq("2.11.11", "2.12.7")
-  } else if (sparkVersion.value >= "2.3.0") {
-    Seq("2.11.11")
-  } else {
-    Seq("2.10.6", "2.11.11")
-  }
-}
 
-javacOptions ++= {
-    if (sparkVersion.value >= "2.1.1") {
-      Seq("-source", "1.8", "-target", "1.8")
-    } else {
-      Seq("-source", "1.7", "-target", "1.7")
-    }
-}
 
-//tag::spName[]
-spName := "holdenk/spark-testing-base"
-//end::spName[]
 
 sparkComponents := {
-  if (sparkVersion.value >= "2.0.0") Seq("core", "streaming", "sql", "catalyst", "hive", "yarn", "mllib", "streaming-kafka-0-8")
+  if (sparkVersion.value >= "2.4.0") Seq("core", "streaming", "sql", "catalyst", "hive", "yarn", "mllib", "streaming-kafka-0-10")
+  else if (sparkVersion.value >= "2.0.0") Seq("core", "streaming", "sql", "catalyst", "hive", "yarn", "mllib", "streaming-kafka-0-8")
   else Seq("core", "streaming", "sql", "catalyst", "hive", "streaming-kafka", "yarn", "mllib")
 }
 
@@ -66,14 +87,13 @@ scalastyleSources in Compile ++= {unmanagedSourceDirectories in Compile}.value
 scalastyleSources in Test ++= {unmanagedSourceDirectories in Test}.value
 
 // Allow kafka (and other) utils to have version specific files
-unmanagedSourceDirectories in Compile  := {
+val coreSources = unmanagedSourceDirectories in Compile  := {
   if (sparkVersion.value >= "2.2.0") Seq(
     (sourceDirectory in Compile)(_ / "2.2/scala"),
     (sourceDirectory in Compile)(_ / "2.0/scala"),
     (sourceDirectory in Compile)(_ / "1.6/scala"),
     (sourceDirectory in Compile)(_ / "1.5/scala"),
     (sourceDirectory in Compile)(_ / "1.4/scala"),
-    (sourceDirectory in Compile)(_ / "kafka/scala"),
     (sourceDirectory in Compile)(_ / "1.3/scala"), (sourceDirectory in Compile)(_ / "1.3/java")
   ).join.value
   else if (sparkVersion.value >= "2.0.0" && scalaVersion.value >= "2.11") Seq(
@@ -82,7 +102,6 @@ unmanagedSourceDirectories in Compile  := {
     (sourceDirectory in Compile)(_ / "1.6/scala"),
     (sourceDirectory in Compile)(_ / "1.5/scala"),
     (sourceDirectory in Compile)(_ / "1.4/scala"),
-    (sourceDirectory in Compile)(_ / "kafka/scala"),
     (sourceDirectory in Compile)(_ / "1.3/scala"), (sourceDirectory in Compile)(_ / "1.3/java")
   ).join.value
   else if (sparkVersion.value >= "2.0.0") Seq(
@@ -91,7 +110,6 @@ unmanagedSourceDirectories in Compile  := {
     (sourceDirectory in Compile)(_ / "1.6/scala"),
     (sourceDirectory in Compile)(_ / "1.5/scala"),
     (sourceDirectory in Compile)(_ / "1.4/scala"),
-    (sourceDirectory in Compile)(_ / "kafka/scala"),
     (sourceDirectory in Compile)(_ / "1.3/scala"), (sourceDirectory in Compile)(_ / "1.3/java")
   ).join.value
   else if (sparkVersion.value >= "1.6") Seq(
@@ -99,21 +117,18 @@ unmanagedSourceDirectories in Compile  := {
     (sourceDirectory in Compile)(_ / "1.6/scala"),
     (sourceDirectory in Compile)(_ / "1.5/scala"),
     (sourceDirectory in Compile)(_ / "1.4/scala"),
-    (sourceDirectory in Compile)(_ / "kafka/scala"),
     (sourceDirectory in Compile)(_ / "1.3/scala"), (sourceDirectory in Compile)(_ / "1.3/java")
   ).join.value
   else if (sparkVersion.value >= "1.5") Seq(
     (sourceDirectory in Compile)(_ / "pre-2.0/scala"),
     (sourceDirectory in Compile)(_ / "1.5/scala"),
     (sourceDirectory in Compile)(_ / "1.4/scala"),
-    (sourceDirectory in Compile)(_ / "kafka/scala"),
     (sourceDirectory in Compile)(_ / "1.3/scala"), (sourceDirectory in Compile)(_ / "1.3/java")
   ).join.value
   else if (sparkVersion.value >= "1.4") Seq(
     (sourceDirectory in Compile)(_ / "pre-2.0/scala"),
     (sourceDirectory in Compile)(_ / "pre-1.5/scala"),
     (sourceDirectory in Compile)(_ / "1.4/scala"),
-    (sourceDirectory in Compile)(_ / "kafka/scala"),
     (sourceDirectory in Compile)(_ / "1.3/scala"), (sourceDirectory in Compile)(_ / "1.3/java")
   ).join.value
   else Seq(
@@ -124,33 +139,29 @@ unmanagedSourceDirectories in Compile  := {
   ).join.value
 }
 
-unmanagedSourceDirectories in Test  := {
+val coreTestSources = unmanagedSourceDirectories in Test  := {
   if (sparkVersion.value >= "2.2.0") Seq(
     (sourceDirectory in Test)(_ / "2.2/scala"),
     (sourceDirectory in Test)(_ / "2.0/scala"),
     (sourceDirectory in Test)(_ / "1.6/scala"), (sourceDirectory in Test)(_ / "1.6/java"),
     (sourceDirectory in Test)(_ / "1.4/scala"),
-    (sourceDirectory in Test)(_ / "kafka/scala"),
     (sourceDirectory in Test)(_ / "1.3/scala"), (sourceDirectory in Test)(_ / "1.3/java")
   ).join.value
   else if (sparkVersion.value >= "2.0.0") Seq(
     (sourceDirectory in Test)(_ / "2.0/scala"),
     (sourceDirectory in Test)(_ / "1.6/scala"), (sourceDirectory in Test)(_ / "1.6/java"),
     (sourceDirectory in Test)(_ / "1.4/scala"),
-    (sourceDirectory in Test)(_ / "kafka/scala"),
     (sourceDirectory in Test)(_ / "1.3/scala"), (sourceDirectory in Test)(_ / "1.3/java")
   ).join.value
   else if (sparkVersion.value >= "1.6") Seq(
     (sourceDirectory in Test)(_ / "pre-2.0/scala"), (sourceDirectory in Test)(_ / "pre-2.0/java"),
     (sourceDirectory in Test)(_ / "1.6/scala"), (sourceDirectory in Test)(_ / "1.6/java"),
     (sourceDirectory in Test)(_ / "1.4/scala"),
-    (sourceDirectory in Test)(_ / "kafka/scala"),
     (sourceDirectory in Test)(_ / "1.3/scala"), (sourceDirectory in Test)(_ / "1.3/java")
   ).join.value
   else if (sparkVersion.value >= "1.4") Seq(
     (sourceDirectory in Test)(_ / "pre-2.0/scala"), (sourceDirectory in Test)(_ / "pre-2.0/java"),
     (sourceDirectory in Test)(_ / "1.4/scala"),
-    (sourceDirectory in Test)(_ / "kafka/scala"),
     (sourceDirectory in Test)(_ / "1.3/scala"), (sourceDirectory in Test)(_ / "1.3/java")
   ).join.value
   else Seq(
@@ -164,9 +175,9 @@ javaOptions ++= Seq("-Xms2G", "-Xmx2G", "-XX:MaxPermSize=2048M", "-XX:+CMSClassU
 
 // additional libraries
 libraryDependencies ++= Seq(
-  "org.scalatest" %% "scalatest" % "3.0.1",
+  "org.scalatest" %% "scalatest" % "3.0.5",
   "io.github.nicolasstucki" %% "multisets" % "0.4",
-  "org.scalacheck" %% "scalacheck" % "1.13.4",
+  "org.scalacheck" %% "scalacheck" % "1.14.0",
   "junit" % "junit" % "4.12",
   "org.eclipse.jetty" % "jetty-util" % "9.3.11.v20160721",
   "com.novocode" % "junit-interface" % "0.11" % "test->default")
@@ -190,7 +201,6 @@ lazy val miniClusterDependencies = excludeJavaxServlet(Seq(
 
 libraryDependencies ++= miniClusterDependencies
 
-scalacOptions ++= Seq("-deprecation", "-unchecked")
 
 pomIncludeRepository := { x => false }
 
