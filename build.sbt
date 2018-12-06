@@ -27,7 +27,7 @@ lazy val kafka_0_10 = (project in file("kafka-0.10"))
   .settings(
     name := "spark-testing-kafka-0_10",
     commonSettings,
-    sparkComponents += "streaming-kafka-0-10"
+    sparkComponents := Seq("core", "streaming", "streaming-kafka-0-10")
   )
 
 val commonSettings = Seq(
