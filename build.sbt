@@ -6,19 +6,28 @@ lazy val core = (project in file("core"))
     name := "spark-testing-base",
     commonSettings,
     coreSources,
-    coreTestSources
+    coreTestSources,
+    sparkComponents := {
+      if (sparkVersion.value >= "2.0.0") Seq("core", "streaming", "sql", "catalyst", "hive", "yarn", "mllib" /*, "streaming-kafka-0-8" */)
+      else Seq("core", "streaming", "sql", "catalyst", "hive", "streaming-kafka", "yarn", "mllib")
+    },
+    libraryDependencies ++= commonDependencies ++ miniClusterDependencies
   )
 
 lazy val kafka_0_8 = (project in file("kafka-0.8"))
+  .dependsOn(core)
   .settings(
     name := "spark-testing-kafka-0_8",
-    commonSettings
+    commonSettings,
+    sparkComponents := Seq("core", "streaming", "streaming-kafka-0-8")
   )
 
-lazy val kafka_0_10 = (projectin in file("kafka-0.10"))
+lazy val kafka_0_10 = (project in file("kafka-0.10"))
+  .dependsOn(core)
   .settings(
     name := "spark-testing-kafka-0_10",
-    commonSettings
+    commonSettings,
+    sparkComponents += "streaming-kafka-0-10"
   )
 
 val commonSettings = Seq(
@@ -49,42 +58,22 @@ val commonSettings = Seq(
     } else {
       Seq("-source", "1.7", "-target", "1.7")
     }
-  }
-)
-
-// See https://github.com/scala/scala/pull/3799
-coverageHighlighting := {
-  if (sparkVersion.value >= "2.0.0") {
-    true
-  } else {
-    false
   },
+  javaOptions ++= Seq("-Xms2G", "-Xmx2G", "-XX:MaxPermSize=2048M", "-XX:+CMSClassUnloadingEnabled"),
+
+  // See https://github.com/scala/scala/pull/3799
+  coverageHighlighting := sparkVersion.value >= "2.0.0" && scalaBinaryVersion.value != "2.10",
+
   //tag::spName[]
-  spName := "holdenk/spark-testing-base"
-  //end::spName[]
-}
+  spName := "holdenk/spark-testing-base",
+  //end::spName[],
+ 
+  parallelExecution in Test := false,
+  fork := true,
 
-
-
-
-
-sparkComponents := {
-  if (sparkVersion.value >= "2.4.0") Seq("core", "streaming", "sql", "catalyst", "hive", "yarn", "mllib", "streaming-kafka-0-10")
-  else if (sparkVersion.value >= "2.0.0") Seq("core", "streaming", "sql", "catalyst", "hive", "yarn", "mllib", "streaming-kafka-0-8")
-  else Seq("core", "streaming", "sql", "catalyst", "hive", "streaming-kafka", "yarn", "mllib")
-}
-
-parallelExecution in Test := false
-fork := true
-
-
-coverageHighlighting := {
-  if (scalaBinaryVersion.value == "2.10") false
-  else true
-}
-
-scalastyleSources in Compile ++= {unmanagedSourceDirectories in Compile}.value
-scalastyleSources in Test ++= {unmanagedSourceDirectories in Test}.value
+  scalastyleSources in Compile ++= {unmanagedSourceDirectories in Compile}.value,
+  scalastyleSources in Test ++= {unmanagedSourceDirectories in Test}.value
+)
 
 // Allow kafka (and other) utils to have version specific files
 val coreSources = unmanagedSourceDirectories in Compile  := {
@@ -171,10 +160,9 @@ val coreTestSources = unmanagedSourceDirectories in Test  := {
 }
 
 
-javaOptions ++= Seq("-Xms2G", "-Xmx2G", "-XX:MaxPermSize=2048M", "-XX:+CMSClassUnloadingEnabled")
 
 // additional libraries
-libraryDependencies ++= Seq(
+lazy val commonDependencies = Seq(
   "org.scalatest" %% "scalatest" % "3.0.5",
   "io.github.nicolasstucki" %% "multisets" % "0.4",
   "org.scalacheck" %% "scalacheck" % "1.14.0",
@@ -198,9 +186,6 @@ lazy val miniClusterDependencies = excludeJavaxServlet(Seq(
   "org.apache.hadoop" % "hadoop-yarn-server-tests" % "2.8.3" % "compile,test" classifier "" classifier "tests",
   "org.apache.hadoop" % "hadoop-yarn-server-web-proxy" % "2.8.3" % "compile,test" classifier "" classifier "tests",
   "org.apache.hadoop" % "hadoop-minicluster" % "2.8.3" % "compile,test"))
-
-libraryDependencies ++= miniClusterDependencies
-
 
 pomIncludeRepository := { x => false }
 
