@@ -1,26 +1,33 @@
 lazy val root = (project in file("."))
   .aggregate(core, kafka_0_8, kafka_0_10)
+  .settings(noPublishSettings)
 
 lazy val core = (project in file("core"))
   .settings(
     name := "spark-testing-base",
     commonSettings,
+    publishSettings,
     coreSources,
     coreTestSources,
-    sparkComponents := {
-      if (sparkVersion.value >= "2.0.0") Seq("core", "streaming", "sql", "catalyst", "hive", "yarn", "mllib" /*, "streaming-kafka-0-8" */)
-      else Seq("core", "streaming", "sql", "catalyst", "hive", "streaming-kafka", "yarn", "mllib")
-    },
+    sparkComponents := Seq("core", "streaming", "sql", "catalyst", "hive", "yarn", "mllib"),
     libraryDependencies ++= commonDependencies ++ miniClusterDependencies
   )
 
-lazy val kafka_0_8 = (project in file("kafka-0.8"))
-  .dependsOn(core)
-  .settings(
-    name := "spark-testing-kafka-0_8",
-    commonSettings,
-    sparkComponents := Seq("core", "streaming", "streaming-kafka-0-8")
-  )
+lazy val kafka_0_8 = {
+  if (sparkVersion.value >= "1.4" && scalaVersion.value < "2.12.0") {
+    (project in file("kafka-0.8"))
+      .dependsOn(core)
+      .settings(
+        name := "spark-testing-kafka-0_8",
+        commonSettings,
+        publishSettings,
+        sparkComponents := {
+          if (sparkVersion.value >= "2.0.0") Seq("core", "streaming", "streaming-kafka-0-8")
+          else Seq("core", "streaming", "streaming-kafka")
+        }
+      )
+  } else dummyProject
+}
 
 lazy val kafka_0_10 = (project in file("kafka-0.10"))
   .dependsOn(core)
@@ -29,6 +36,9 @@ lazy val kafka_0_10 = (project in file("kafka-0.10"))
     commonSettings,
     sparkComponents := Seq("core", "streaming", "streaming-kafka-0-10")
   )
+
+private lazy val dummyProject = (project in file("."))
+  .settings(noPublishSettings)
 
 val commonSettings = Seq(
   organization := "com.holdenkarau",
@@ -72,7 +82,21 @@ val commonSettings = Seq(
   fork := true,
 
   scalastyleSources in Compile ++= {unmanagedSourceDirectories in Compile}.value,
-  scalastyleSources in Test ++= {unmanagedSourceDirectories in Test}.value
+  scalastyleSources in Test ++= {unmanagedSourceDirectories in Test}.value,
+
+  resolvers ++= Seq(
+    "JBoss Repository" at "http://repository.jboss.org/nexus/content/repositories/releases/",
+    "Spray Repository" at "http://repo.spray.cc/",
+    "Cloudera Repository" at "https://repository.cloudera.com/artifactory/cloudera-repos/",
+    "Apache HBase" at "https://repository.apache.org/content/repositories/releases",
+    "Twitter Maven Repo" at "http://maven.twttr.com/",
+    "scala-tools" at "https://oss.sonatype.org/content/groups/scala-tools",
+    "sonatype-releases" at "https://oss.sonatype.org/content/repositories/releases/",
+    "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/",
+    "Second Typesafe repo" at "http://repo.typesafe.com/typesafe/maven-releases/",
+    "Mesosphere Public Repository" at "http://downloads.mesosphere.io/maven",
+    Resolver.sonatypeRepo("public")
+  )
 )
 
 // Allow kafka (and other) utils to have version specific files
@@ -187,53 +211,35 @@ lazy val miniClusterDependencies = excludeJavaxServlet(Seq(
   "org.apache.hadoop" % "hadoop-yarn-server-web-proxy" % "2.8.3" % "compile,test" classifier "" classifier "tests",
   "org.apache.hadoop" % "hadoop-minicluster" % "2.8.3" % "compile,test"))
 
-pomIncludeRepository := { x => false }
-
-resolvers ++= Seq(
-  "JBoss Repository" at "http://repository.jboss.org/nexus/content/repositories/releases/",
-  "Spray Repository" at "http://repo.spray.cc/",
-  "Cloudera Repository" at "https://repository.cloudera.com/artifactory/cloudera-repos/",
-  "Apache HBase" at "https://repository.apache.org/content/repositories/releases",
-  "Twitter Maven Repo" at "http://maven.twttr.com/",
-  "scala-tools" at "https://oss.sonatype.org/content/groups/scala-tools",
-  "sonatype-releases" at "https://oss.sonatype.org/content/repositories/releases/",
-  "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/",
-  "Second Typesafe repo" at "http://repo.typesafe.com/typesafe/maven-releases/",
-  "Mesosphere Public Repository" at "http://downloads.mesosphere.io/maven",
-  Resolver.sonatypeRepo("public")
-)
-
 // publish settings
-publishTo := {
-  val nexus = "https://oss.sonatype.org/"
-  if (isSnapshot.value)
-    Some("snapshots" at nexus + "content/repositories/snapshots")
-  else
-    Some("releases"  at nexus + "service/local/staging/deploy/maven2")
-}
+lazy val publishSettings = Seq(
+  pomIncludeRepository := { _ => false },
+  publishTo := {
+    val nexus = "https://oss.sonatype.org/"
+    if (isSnapshot.value)
+      Some("snapshots" at nexus + "content/repositories/snapshots")
+    else
+      Some("releases"  at nexus + "service/local/staging/deploy/maven2")
+  },
 
-licenses := Seq("Apache License 2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html"))
+  licenses := Seq("Apache License 2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html")),
 
-homepage := Some(url("https://github.com/holdenk/spark-testing-base"))
+  homepage := Some(url("https://github.com/holdenk/spark-testing-base")),
 
-pomExtra := (
-  <scm>
-    <url>git@github.com:holdenk/spark-testing-base.git</url>
-    <connection>scm:git@github.com:holdenk/spark-testing-base.git</connection>
-  </scm>
-  <developers>
-    <developer>
-      <id>holdenk</id>
-      <name>Holden Karau</name>
-      <url>http://www.holdenkarau.com</url>
-      <email>holden@pigscanfly.ca</email>
-    </developer>
-  </developers>
+  scmInfo := Some(ScmInfo(
+    url("git@github.com:holdenk/spark-testing-base.git"),
+    "scm:git@github.com:holdenk/spark-testing-base.git"
+  )),
+
+  developers := List(
+    Developer("holdenk", "Holden Karau", "holden@pigscanfly.ca", url("http://www.holdenkarau.com"))
+  ),
+
+  //credentials += Credentials(Path.userHome / ".ivy2" / ".spcredentials")
+  credentials ++= Seq(Credentials(Path.userHome / ".ivy2" / ".sbtcredentials"), Credentials(Path.userHome / ".ivy2" / ".sparkcredentials")),
+  spIncludeMaven := true,
+  useGpg := true
 )
 
-//credentials += Credentials(Path.userHome / ".ivy2" / ".spcredentials")
-credentials ++= Seq(Credentials(Path.userHome / ".ivy2" / ".sbtcredentials"), Credentials(Path.userHome / ".ivy2" / ".sparkcredentials"))
-
-spIncludeMaven := true
-
-useGpg := true
+lazy val noPublishSettings =
+  skip in publish := true
