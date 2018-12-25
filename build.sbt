@@ -1,6 +1,8 @@
 lazy val root = (project in file("."))
-  .aggregate(core, kafka_0_8, kafka_0_10)
-  .settings(noPublishSettings)
+  .aggregate(core, kafka_0_8)
+  .settings(noPublishSettings, commonSettings)
+
+val sparkVersion = settingKey[String]("Spark version")
 
 lazy val core = (project in file("core"))
   .settings(
@@ -9,36 +11,60 @@ lazy val core = (project in file("core"))
     publishSettings,
     coreSources,
     coreTestSources,
-    sparkComponents := Seq("core", "streaming", "sql", "catalyst", "hive", "yarn", "mllib"),
-    libraryDependencies ++= commonDependencies ++ miniClusterDependencies
+    crossScalaVersions := {
+      if (sparkVersion.value >= "2.4.0") {
+        Seq("2.11.11", "2.12.7")
+      } else if (sparkVersion.value >= "2.3.0") {
+        Seq("2.11.11")
+      } else {
+        Seq("2.10.6", "2.11.11")
+      }
+    },
+    libraryDependencies ++= Seq(
+      "org.apache.spark" %% "spark-core"        % sparkVersion.value,
+      "org.apache.spark" %% "spark-streaming"   % sparkVersion.value,
+      "org.apache.spark" %% "spark-sql"         % sparkVersion.value,
+      "org.apache.spark" %% "spark-hive"        % sparkVersion.value,
+      "org.apache.spark" %% "spark-catalyst"    % sparkVersion.value,
+      "org.apache.spark" %% "spark-yarn"        % sparkVersion.value,
+      "org.apache.spark" %% "spark-mllib"       % sparkVersion.value
+    ) ++ commonDependencies ++ miniClusterDependencies
   )
 
 lazy val kafka_0_8 = {
-  if (sparkVersion.value >= "1.4" && scalaVersion.value < "2.12.0") {
-    (project in file("kafka-0.8"))
-      .dependsOn(core)
-      .settings(
-        name := "spark-testing-kafka-0_8",
-        commonSettings,
-        publishSettings,
-        sparkComponents := {
-          if (sparkVersion.value >= "2.0.0") Seq("core", "streaming", "streaming-kafka-0-8")
-          else Seq("core", "streaming", "streaming-kafka")
+  Project("kafka_0_8", file("kafka-0.8"))
+    .dependsOn(core)
+    .settings(
+      name := "spark-testing-kafka-0_8",
+      commonSettings,
+      unmanagedSourceDirectories in Compile:= {
+        if (sparkVersion.value >= "1.4" && scalaVersion.value < "2.12.0")
+          (unmanagedSourceDirectories in Compile).value
+        else Seq.empty
+      },
+      skip in publish := {
+        sparkVersion.value < "1.4" || scalaVersion.value >= "2.12.0"
+      },
+      crossScalaVersions := {
+        if (sparkVersion.value >= "2.3.0") {
+          Seq("2.11.11")
+        } else {
+          Seq("2.10.6", "2.11.11")
         }
+      },
+      libraryDependencies ++= Seq(
+        "org.apache.spark" %% "spark-streaming-kafka-0-8" % sparkVersion.value
       )
-  } else dummyProject
+    )
 }
 
-lazy val kafka_0_10 = (project in file("kafka-0.10"))
-  .dependsOn(core)
-  .settings(
-    name := "spark-testing-kafka-0_10",
-    commonSettings,
-    sparkComponents := Seq("core", "streaming", "streaming-kafka-0-10")
-  )
-
-private lazy val dummyProject = (project in file("."))
-  .settings(noPublishSettings)
+//lazy val kafka_0_10 = (project in file("kafka-0.10"))
+//  .dependsOn(core)
+//  .settings(
+//    name := "spark-testing-kafka-0_10",
+//    commonSettings,
+//    sparkComponents := Seq("core", "streaming", "streaming-kafka-0-10")
+//  )
 
 val commonSettings = Seq(
   organization := "com.holdenkarau",
@@ -50,15 +76,6 @@ val commonSettings = Seq(
       "2.11.11"
     } else {
       "2.10.6"
-    }
-  },
-  crossScalaVersions := {
-    if (sparkVersion.value >= "2.4.0") {
-      Seq("2.11.11", "2.12.7")
-    } else if (sparkVersion.value >= "2.3.0") {
-      Seq("2.11.11")
-    } else {
-      Seq("2.10.6", "2.11.11")
     }
   },
   scalacOptions ++= Seq("-deprecation", "-unchecked"),
@@ -74,10 +91,6 @@ val commonSettings = Seq(
   // See https://github.com/scala/scala/pull/3799
   coverageHighlighting := sparkVersion.value >= "2.0.0" && scalaBinaryVersion.value != "2.10",
 
-  //tag::spName[]
-  spName := "holdenk/spark-testing-base",
-  //end::spName[],
- 
   parallelExecution in Test := false,
   fork := true,
 
@@ -227,7 +240,7 @@ lazy val publishSettings = Seq(
   homepage := Some(url("https://github.com/holdenk/spark-testing-base")),
 
   scmInfo := Some(ScmInfo(
-    url("git@github.com:holdenk/spark-testing-base.git"),
+    url("https://github.com/holdenk/spark-testing-base.git"),
     "scm:git@github.com:holdenk/spark-testing-base.git"
   )),
 
@@ -237,7 +250,6 @@ lazy val publishSettings = Seq(
 
   //credentials += Credentials(Path.userHome / ".ivy2" / ".spcredentials")
   credentials ++= Seq(Credentials(Path.userHome / ".ivy2" / ".sbtcredentials"), Credentials(Path.userHome / ".ivy2" / ".sparkcredentials")),
-  spIncludeMaven := true,
   useGpg := true
 )
 
