@@ -1,5 +1,5 @@
 lazy val root = (project in file("."))
-  .aggregate(core, kafka_0_8)
+  .aggregate(core, kafka_0_8, kafka_0_10)
   .settings(noPublishSettings, commonSettings)
 
 val sparkVersion = settingKey[String]("Spark version")
@@ -32,37 +32,67 @@ lazy val core = (project in file("core"))
     ) ++ commonDependencies ++ miniClusterDependencies
   )
 
-lazy val kafka_0_8 = {
-  Project("kafka_0_8", file("kafka-0.8"))
-    .dependsOn(core)
-    .settings(
-      name := "spark-testing-kafka-0_8",
-      commonSettings,
-      unmanagedSourceDirectories in Compile := {
-        if (sparkVersion.value >= "1.4" && scalaVersion.value < "2.12.0")
-          (unmanagedSourceDirectories in Compile).value
-        else Seq.empty
-      },
-      unmanagedSourceDirectories in Test := {
-        if (sparkVersion.value >= "1.4" && scalaVersion.value < "2.12.0")
-          (unmanagedSourceDirectories in Test).value
-        else Seq.empty
-      },
-      skip in publish := {
-        sparkVersion.value < "1.4" || scalaVersion.value >= "2.12.0"
-      },
-      crossScalaVersions := {
-        if (sparkVersion.value >= "2.3.0") {
-          Seq("2.11.11")
-        } else {
-          Seq("2.10.6", "2.11.11")
-        }
-      },
-      libraryDependencies ++= Seq(
-        "org.apache.spark" %% "spark-streaming-kafka-0-8" % sparkVersion.value
-      )
+lazy val kafka_0_8 = (project in file("kafka-0.8"))
+  .dependsOn(core)
+  .settings(
+    name := "spark-testing-kafka-0_8",
+    commonSettings,
+    unmanagedSourceDirectories in Compile := {
+      if (sparkVersion.value >= "1.4" && scalaVersion.value < "2.12.0")
+        (unmanagedSourceDirectories in Compile).value
+      else Seq.empty
+    },
+    unmanagedSourceDirectories in Test := {
+      if (sparkVersion.value >= "1.4" && scalaVersion.value < "2.12.0")
+        (unmanagedSourceDirectories in Test).value
+      else Seq.empty
+    },
+    skip in publish := {
+      sparkVersion.value < "1.4" || scalaVersion.value >= "2.12.0"
+    },
+    crossScalaVersions := {
+      if (sparkVersion.value >= "2.3.0") {
+        Seq("2.11.11")
+      } else {
+        Seq("2.10.6", "2.11.11")
+      }
+    },
+    libraryDependencies ++= Seq(
+      "org.apache.spark" %% "spark-streaming-kafka-0-8" % sparkVersion.value
     )
-}
+  )
+
+lazy val kafka_0_10 = (project in file("kafka-0.10"))
+  .dependsOn(core)
+  .settings(
+    name := "spark-testing-kafka-0_8",
+    commonSettings,
+    unmanagedSourceDirectories in Compile := {
+      if (sparkVersion.value >= "1.4" && scalaVersion.value < "2.12.0")
+        (unmanagedSourceDirectories in Compile).value
+      else Seq.empty
+    },
+    unmanagedSourceDirectories in Test := {
+      if (sparkVersion.value >= "1.4" && scalaVersion.value < "2.12.0")
+        (unmanagedSourceDirectories in Test).value
+      else Seq.empty
+    },
+    skip in publish := {
+      sparkVersion.value < "1.4" || scalaVersion.value >= "2.12.0"
+    },
+    crossScalaVersions := {
+      if (sparkVersion.value >= "2.4.0") {
+        Seq("2.11.11", "2.12.7")
+      } else if (sparkVersion.value >= "2.3.0") {
+        Seq("2.11.11")
+      } else {
+        Seq("2.10.6", "2.11.11")
+      }
+    },
+    libraryDependencies ++= Seq(
+      "org.apache.spark" %% "spark-streaming-kafka-0-10" % sparkVersion.value
+    )
+  )
 
 val commonSettings = Seq(
   organization := "com.holdenkarau",
@@ -280,5 +310,7 @@ lazy val publishSettings = Seq(
   }
 )
 
-lazy val noPublishSettings =
-  skip in publish := true
+lazy val noPublishSettings = Seq(
+  skip in publish := true,
+  crossScalaVersions := Nil
+)
